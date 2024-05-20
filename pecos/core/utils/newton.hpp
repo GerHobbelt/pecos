@@ -279,26 +279,31 @@ namespace pecos {
     //  https://github.com/cjlin1/libsvm/blob/master/svm.cpp
 
     template <typename value_type>
-    static void fit_platt_transform(size_t num_samples, const value_type *logits, const value_type *tgt_probs, double& A, double& B) {
+    uint32_t fit_platt_transform(size_t num_samples, const value_type *logits, const value_type *tgt_probs, double& A, double& B) {
+        // define the return code
+        enum {
+            SUCCESS=0,
+            LINE_SEARCH_FAIL=1,
+            MAX_ITER_REACHED=2,
+        };
+
         // hyper parameters
         int max_iter = 100; // Maximal number of iterations
         double min_step = 1e-10;    // Minimal step taken in line search
         double sigma = 1e-12; // For numerically strict PD of Hessian
-        double eps = 1e-6;
+        double eps = 1e-5;
 
-	int iter;
+        // calculate prior of B
+        double prior1 = 0;
+        for (size_t i = 0; i < num_samples; i++) {
+            prior1 += tgt_probs[i];
+        }
+        double prior0 = double(num_samples) - prior1;
+
 
         // Initial Point and Initial Fun Value
-        A = 0.0; B = 1.0;
+        A = 0.0; B = log((prior0 + 1.0) / (prior1 + 1.0));
         double fval = 0.0;
-
-        // check for out of bound in tgt_probs
-	for (size_t i = 0; i < num_samples; i++) {
-	    if (tgt_probs[i] > 1.0 || tgt_probs[i] < 0) {
-                throw std::runtime_error("fit_platt_transform: target probability out of bound\n");
-	    }
-        }
-
 
         for (size_t i = 0; i < num_samples; i++) {
             double fApB = logits[i] * A + B;
@@ -308,17 +313,18 @@ namespace pecos {
                 fval += (tgt_probs[i] - 1) * fApB + log(1 + exp(fApB));
             }
         }
+        int iter;
         for (iter = 0; iter < max_iter; iter++) {
             // Update Gradient and Hessian (use H' = H + sigma I)
             double h11 = sigma;
             double h22 = sigma; // numerically ensures strict PD
             double h21 = 0.0;
-            double g1 = 0.0;
-            double g2 = 0.0;
+            double g1 = A * sigma;
+            double g2 = B * sigma;
 
             for (size_t i = 0; i < num_samples; i++) {
                 double fApB = logits[i] * A + B;
-		double p = 0, q = 0;
+                double p = 0, q = 0;
                 if (fApB >= 0) {
                     p = exp(-fApB) / (1.0 + exp(-fApB));
                     q = 1.0 / (1.0 + exp(-fApB));
@@ -376,13 +382,16 @@ namespace pecos {
             }
 
             if (stepsize < min_step) {
-                throw std::runtime_error("fit_platt_transform: Line search fails\n");
+                printf("WARNING: fit_platt_transform: Line search fails\n");
+                return LINE_SEARCH_FAIL;
             }
         }
 
         if (iter >= max_iter) {
-            throw std::runtime_error("fit_platt_transform: Reaching maximal iterations\n");
+            printf("WARNING: fit_platt_transform: Reaching maximal iterations\n");
+            return MAX_ITER_REACHED;
         }
+        return SUCCESS;
     }
 } // namespace pecos
 #endif

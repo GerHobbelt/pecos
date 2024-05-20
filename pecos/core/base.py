@@ -532,6 +532,7 @@ class corelib(object):
         self.link_clustering()
         self.link_tfidf_vectorizer()
         self.link_ann_hnsw_methods()
+        self.link_pairwise_ann_methods()
         self.link_mmap_hashmap_methods()
         self.link_mmap_valstore_methods()
         self.link_calibrator_methods()
@@ -1440,7 +1441,7 @@ class corelib(object):
         Args:
             model (ptr): Pointer to C Tfdif model.
         """
-        if type(model) == c_void_p:
+        if isinstance(model, c_void_p):
             self.clib_float32.c_tfidf_destruct(model)
 
     def tfidf_save(self, model, save_dir):
@@ -1703,6 +1704,108 @@ class corelib(object):
             )
         return self.ann_hnsw_fn_dict[data_type, metric_type]
 
+    def link_pairwise_ann_methods(self):
+        """
+        Specify C-lib's PairwiseANN method argument and return type.
+        """
+        data_type_map = {"drm": POINTER(ScipyDrmF32), "csr": POINTER(ScipyCsrF32)}
+        metric_type_list = ["ip"]
+        self.pairwise_ann_fn_dict = {}
+        for data_type in data_type_map:
+            for metric_type in metric_type_list:
+                local_fn_dict = {"data_type": data_type, "metric_type": metric_type}
+
+                fn_name = "train"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = c_void_p  # pointer to C/C++ pecos::ann::PairwiseANN
+                arg_list = [
+                    data_type_map[data_type],  # X_trn (either drm/csr)
+                    POINTER(ScipyCscF32),  # Y_csc (csc only)
+                ]
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "load"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = c_void_p  # pointer to C/C++ pecos::ann::PairwiseANN
+                arg_list = [
+                    c_char_p,  # pointer to C/C++ pecos:ann::PairwiseANN
+                    c_bool,  # bool for lazy_load of mmap files
+                ]
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "save"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = None
+                arg_list = [
+                    c_void_p,  # pointer to C/C++ pecos::ann::PairwiseANN
+                    c_char_p,  # pointer to char* model_dir
+                ]
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "destruct"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = None
+                arg_list = [c_void_p]  # pointer to C/C++ pecos::ann::PairwiseANN
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "searchers_create"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = c_void_p  # pointer to vector<pecos::ann::PairwiseANN::Searcher>
+                arg_list = [
+                    c_void_p,  # pointer C/C++ pecos::ann::PairwiseANN
+                    c_uint32,  # number of searcher
+                ]
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "searchers_destruct"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = None
+                arg_list = [
+                    c_void_p
+                ]  # pointer to C/C++ std::vector<pecos::ann::PairwiseANN::Searcher>
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                fn_name = "predict"
+                c_fn_name = f"c_pairwise_ann_{fn_name}_{data_type}_{metric_type}_f32"
+                local_fn_dict[fn_name] = getattr(self.clib_float32, c_fn_name)
+                res_list = None
+                arg_list = [
+                    c_void_p,  # pointer to C/C++ std::vector<pecos::ann::PairwiseANN::Searcher>
+                    c_uint32,  # batch_size
+                    c_uint32,  # topk
+                    data_type_map[data_type],  # ScipyDrmF32*/ScipyCsrF32* Q_tst
+                    POINTER(c_uint32),  # uint32_t* label_keys
+                    POINTER(c_uint32),  # uint32_t* ret_Imat
+                    POINTER(c_uint32),  # uint32_t* ret_Mmat
+                    POINTER(c_float),  # float* ret_Dmat
+                    POINTER(c_float),  # float* ret_Vmat
+                    c_bool,  # bool for is_same_input flag for either batch vs. real-time inference
+                ]
+                corelib.fillprototype(local_fn_dict[fn_name], res_list, arg_list)
+
+                self.pairwise_ann_fn_dict[data_type, metric_type] = local_fn_dict
+
+    def pairwise_ann_init(self, data_type, metric_type):
+        """Python to C/C++ interface for PairwiseANN initialization
+        Args:
+            data_type (str): data type for query matrices, can be either drm or csr
+            metric_type (str): metric type for computing distance functions, can only be ip
+        Returns:
+            pairwise_ann_fn_dict (dict): a dictionary that holds clib's C/C++ functions for Python to call
+        """
+
+        if (data_type, metric_type) not in self.pairwise_ann_fn_dict:
+            raise NotImplementedError(
+                "data_type={} and metric_type={} is not implemented".format(data_type, metric_type)
+            )
+        return self.pairwise_ann_fn_dict[data_type, metric_type]
+
     def link_mmap_hashmap_methods(self):
         """
         Specify C-lib's Memory-mappable Hashmap methods arguments and return types.
@@ -1946,45 +2049,57 @@ class corelib(object):
         """
         corelib.fillprototype(
             self.clib_float32.c_fit_platt_transform_f32,
-            None,
+            c_uint32,
             [c_uint64, POINTER(c_float), POINTER(c_float), POINTER(c_double)],
         )
         corelib.fillprototype(
             self.clib_float32.c_fit_platt_transform_f64,
-            None,
+            c_uint32,
             [c_uint64, POINTER(c_double), POINTER(c_double), POINTER(c_double)],
         )
 
-    def fit_platt_transform(self, logits, tgt_prob):
+    def fit_platt_transform(self, logits, targets, clip_tgt_prob=True):
         """Python to C/C++ interface for platt transfrom fit.
 
         Ref: https://www.csie.ntu.edu.tw/~cjlin/papers/plattprob.pdf
 
         Args:
             logits (ndarray): 1-d array of logit with length N.
-            tgt_prob (ndarray): 1-d array of target probability scores within [0, 1] with length N.
+            targets (ndarray): 1-d array of target probability scores within [0, 1] with length N.
+            clip_tgt_prob (bool): whether to clip the target probability to
+                [1/(prior0 + 2), 1 - 1/(prior1 + 2)]
+                where prior1 = sum(targets), prior0 = N - prior1
         Returns:
             A, B: coefficients for Platt's scale.
         """
         assert isinstance(logits, np.ndarray)
-        assert isinstance(tgt_prob, np.ndarray)
-        assert len(logits) == len(tgt_prob)
-        assert logits.dtype == tgt_prob.dtype
+        assert isinstance(targets, np.ndarray)
+        assert len(logits) == len(targets)
+        assert logits.dtype == targets.dtype
 
-        if tgt_prob.min() < 0 or tgt_prob.max() > 1.0:
+        if targets.min() < 0 or targets.max() > 1.0:
             raise ValueError("Target probability out of bound!")
+
+        min_prob, max_prob = 0.0, 1.0
+        if clip_tgt_prob:
+            prior1 = np.sum(targets)
+            prior0 = len(targets) - prior1
+            min_prob = 1.0 / (prior0 + 2.0)
+            max_prob = (prior1 + 1.0) / (prior1 + 2.0)
+
+        tgt_prob = np.clip(targets, min_prob, max_prob)
 
         AB = np.array([0, 0], dtype=np.float64)
 
         if tgt_prob.dtype == np.float32:
-            clib.clib_float32.c_fit_platt_transform_f32(
+            return_code = clib.clib_float32.c_fit_platt_transform_f32(
                 len(logits),
                 logits.ctypes.data_as(POINTER(c_float)),
                 tgt_prob.ctypes.data_as(POINTER(c_float)),
                 AB.ctypes.data_as(POINTER(c_double)),
             )
         elif tgt_prob.dtype == np.float64:
-            clib.clib_float32.c_fit_platt_transform_f64(
+            return_code = clib.clib_float32.c_fit_platt_transform_f64(
                 len(logits),
                 logits.ctypes.data_as(POINTER(c_double)),
                 tgt_prob.ctypes.data_as(POINTER(c_double)),
@@ -1993,7 +2108,20 @@ class corelib(object):
         else:
             raise ValueError(f"Unsupported dtype: {tgt_prob.dtype}")
 
-        return AB[0], AB[1]
+        PLATT_RETURN_CODE = {
+            "SUCCESS": 0,
+            "LINE_SEARCH_FAIL": 1,
+            "MAX_ITER_REACHED": 2,
+        }
+
+        if return_code == PLATT_RETURN_CODE["SUCCESS"]:
+            return AB[0], AB[1]
+        elif return_code == PLATT_RETURN_CODE["LINE_SEARCH_FAIL"]:
+            raise RuntimeError("fit_platt_transform: Line search fails")
+        elif return_code == PLATT_RETURN_CODE["MAX_ITER_REACHED"]:
+            raise RuntimeError("fit_platt_transform: Reaching maximal iterations")
+        else:
+            raise ValueError(f"Unknown return code {return_code}")
 
 
 clib = corelib(os.path.join(os.path.dirname(os.path.abspath(pecos.__file__)), "core"), "libpecos")
