@@ -74,7 +74,7 @@ After downloading the pre-processed data, you should see files under the `./proc
         |---- download_data.sh
         |---- vect_config.json
         |---- ogbn-arxiv/
-                |---- params.json           # hyper-paramters for GIANT-XRT pre-training
+                |---- params.json           # hyper-parameters for GIANT-XRT pre-training
                 |---- X.all.txt	            # node raw text
                 |---- X.all.xrt-emb.npy	    # node embeddings from XR-Transformer
                 |---- xrt_models/           # XR-Transformer fine-tined models

@@ -112,7 +112,7 @@ class HierarchicalKMeans(Indexer):
         kmeans_max_iter: int = 20
         threads: int = -1
 
-        # paramters for sampling of hierarchical clustering
+        # parameters for sampling of hierarchical clustering
         do_sample: bool = False
         max_sample_rate: float = 1.0
         min_sample_rate: float = 0.1

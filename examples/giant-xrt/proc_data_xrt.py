@@ -17,7 +17,7 @@ from torch_geometric.utils.convert import to_scipy_sparse_matrix
 def main():
     parser = argparse.ArgumentParser(description='Prepare data for Giant-XRT')
     parser.add_argument('--raw-text-path', type=str, required=True, help="Path of raw text (.txt file, each raw correspond to a node)")
-    parser.add_argument('--vectorizer-config-path', type=str, required=True, help="a path to a json file that specify the tfidf hyper-paramters")
+    parser.add_argument('--vectorizer-config-path', type=str, required=True, help="a path to a json file that specify the tfidf hyper-parameters")
     parser.add_argument('--data-root-dir', type=str, default="./dataset")
     parser.add_argument('--xrt-data-dir', type=str, default="./proc_data_xrt")
     parser.add_argument('--dataset', type=str, default="ogbn-arxiv")
